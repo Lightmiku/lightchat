@@ -21,10 +21,9 @@ public class ClientListener {
     private Consumer<Message> onMessageReceived;
     private EventLoopGroup group;
 
-    public ClientListener(String host, int port, String username, Consumer<Message> onMessageReceived) {
+    public ClientListener(String host, int port, Consumer<Message> onMessageReceived) {
         this.host = host;
         this.port = port;
-        this.username = username;
         this.onMessageReceived = onMessageReceived;
     }
 
@@ -47,16 +46,84 @@ public class ClientListener {
 
             ChannelFuture f = b.connect(host, port).sync();
             channel = f.channel();
-
-            // Send Login Message
-            Message loginMsg = new Message(MessageType.LOGIN, username, "Hello");
-            channel.writeAndFlush(loginMsg);
-
             return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
+    }
+
+    public void login(String username, String password) {
+        this.username = username;
+        Message msg = new Message();
+        msg.setType(MessageType.LOGIN);
+        msg.setSender(username);
+        msg.setPassword(password);
+        channel.writeAndFlush(msg);
+    }
+
+    public void register(String username, String password) {
+        Message msg = new Message();
+        msg.setType(MessageType.REGISTER);
+        msg.setSender(username);
+        msg.setPassword(password);
+        channel.writeAndFlush(msg);
+    }
+    
+    public void sendFriendRequest(String targetUser) {
+        Message msg = new Message();
+        msg.setType(MessageType.ADD_FRIEND_REQUEST);
+        msg.setSender(username);
+        msg.setRecipient(targetUser);
+        channel.writeAndFlush(msg);
+    }
+    
+    public void acceptFriendRequest(String requester) {
+        Message msg = new Message();
+        msg.setType(MessageType.ADD_FRIEND_RESPONSE);
+        msg.setSender(username);
+        msg.setRecipient(requester);
+        msg.setContent("ACCEPTED");
+        channel.writeAndFlush(msg);
+    }
+    
+    public void updateAvatar(byte[] imageData) {
+        Message msg = new Message();
+        msg.setType(MessageType.AVATAR_UPDATE);
+        msg.setSender(username);
+        msg.setFileData(imageData);
+        channel.writeAndFlush(msg);
+    }
+    
+    public void requestAdminUserList() {
+        Message msg = new Message();
+        msg.setType(MessageType.ADMIN_GET_USERS);
+        msg.setSender(username);
+        channel.writeAndFlush(msg);
+    }
+    
+    public void banUser(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.ADMIN_BAN_USER);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
+    public void unbanUser(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.ADMIN_UNBAN_USER);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+    
+    public void deleteUser(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.ADMIN_DELETE_USER);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
     }
 
     public void sendMessage(String content, String recipient) {

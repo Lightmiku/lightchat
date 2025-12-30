@@ -13,6 +13,8 @@ public class Message implements Serializable {
     private List<String> onlineUsers; // For user list updates
     private byte[] fileData;
     private String fileName;
+    private String password; // For login/register
+    private String extraInfo; // For generic string data (e.g. avatar color, status)
 
     public Message() {}
 
@@ -36,4 +38,8 @@ public class Message implements Serializable {
     public void setFileData(byte[] fileData) { this.fileData = fileData; }
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getExtraInfo() { return extraInfo; }
+    public void setExtraInfo(String extraInfo) { this.extraInfo = extraInfo; }
 }

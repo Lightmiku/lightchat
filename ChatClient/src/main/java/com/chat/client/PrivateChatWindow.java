@@ -163,7 +163,6 @@ public class PrivateChatWindow {
             }
         }
     }
-}
 
     private void sendMessage() {
         String content = inputField.getText();

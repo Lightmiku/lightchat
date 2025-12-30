@@ -24,6 +24,10 @@ public class ChatServer {
     private static final Map<String, Channel> clients = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws InterruptedException {
+        // Initialize Database
+        DatabaseManager.init();
+        System.out.println("Database initialized.");
+
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
 
@@ -62,6 +66,10 @@ public class ChatServer {
             broadcastUserList();
         }
     }
+    
+    public static Channel getClient(String username) {
+        return clients.get(username);
+    }
 
     public static void broadcastMessage(Message message) {
         for (Channel channel : clients.values()) {
@@ -79,6 +87,22 @@ public class ChatServer {
                 sender.writeAndFlush(message);
             }
         }
+    }
+    
+    public static void kickClient(String username) {
+        Channel ch = clients.get(username);
+        if (ch != null) {
+            Message msg = new Message();
+            msg.setType(MessageType.FORCE_LOGOUT);
+            msg.setContent("You have been banned/kicked by admin.");
+            ch.writeAndFlush(msg);
+            ch.close();
+            removeClient(username);
+        }
+    }
+    
+    public static boolean isUserOnline(String username) {
+        return clients.containsKey(username);
     }
 
     private static void broadcastUserList() {
