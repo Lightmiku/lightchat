@@ -32,7 +32,7 @@ public class ChatClientApp extends Application {
     private ListView<String> userList;
     private TextField inputField;
     private String username;
-    private String serverIp = "127.0.0.1";
+    private String serverIp = "60.205.161.140";
     private Map<String, PrivateChatWindow> privateChats = new HashMap<>();
     private Stage primaryStage;
     private Stage loginStage;
