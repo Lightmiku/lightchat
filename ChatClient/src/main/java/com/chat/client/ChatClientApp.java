@@ -65,7 +65,7 @@ public class ChatClientApp extends Application {
         userField.setPromptText("Username");
         PasswordField passField = new PasswordField();
         passField.setPromptText("Password");
-        TextField ipField = new TextField("127.0.0.1");
+        TextField ipField = new TextField("60.205.161.140");
         ipField.setPromptText("Server IP");
 
         Button btnLogin = new Button("Login");
