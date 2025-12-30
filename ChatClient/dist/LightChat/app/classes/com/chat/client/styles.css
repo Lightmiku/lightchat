@@ -1,0 +1,126 @@
+/* General */
+.root {
+    -fx-font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    -fx-background-color: #f0f2f5;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #4CAF50;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 20;
+    -fx-cursor: hand;
+    -fx-padding: 8 15 8 15;
+}
+
+.button:hover {
+    -fx-background-color: #45a049;
+}
+
+.button:pressed {
+    -fx-background-color: #3d8b40;
+}
+
+/* Secondary Buttons (File/Image) */
+.secondary-button {
+    -fx-background-color: #e4e6eb;
+    -fx-text-fill: #050505;
+}
+
+.secondary-button:hover {
+    -fx-background-color: #d8dadf;
+}
+
+/* Text Fields */
+.text-field {
+    -fx-background-radius: 20;
+    -fx-background-color: white;
+    -fx-border-color: #ddd;
+    -fx-border-radius: 20;
+    -fx-padding: 8 12 8 12;
+}
+
+.text-field:focused {
+    -fx-border-color: #4CAF50;
+}
+
+/* List View (User List) */
+.list-view {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 0);
+}
+
+.list-cell {
+    -fx-padding: 10;
+    -fx-background-color: white;
+    -fx-text-fill: #333;
+}
+
+.list-cell:filled:selected:focused, .list-cell:filled:selected {
+    -fx-background-color: #e8f5e9;
+    -fx-text-fill: #2E7D32;
+    -fx-font-weight: bold;
+}
+
+.list-cell:hover {
+    -fx-background-color: #f0f2f5;
+}
+
+/* Chat Area */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Chat Bubbles */
+.chat-bubble {
+    -fx-padding: 10 15 10 15;
+    -fx-background-radius: 18;
+    -fx-max-width: 400px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 2, 0, 0, 1);
+}
+
+.chat-bubble-self {
+    -fx-background-color: #4CAF50;
+    -fx-background-radius: 18 18 0 18;
+}
+
+.chat-bubble-other {
+    -fx-background-color: white;
+    -fx-background-radius: 18 18 18 0;
+}
+
+.chat-text-self {
+    -fx-fill: white;
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+}
+
+.chat-text-other {
+    -fx-fill: black;
+    -fx-text-fill: black;
+    -fx-font-size: 14px;
+}
+
+.sender-name {
+    -fx-font-size: 10px;
+    -fx-text-fill: #65676b;
+    -fx-padding: 0 0 2 5;
+}
+
+.timestamp {
+    -fx-font-size: 10px;
+    -fx-text-fill: rgba(255,255,255,0.7);
+    -fx-padding: 5 0 0 0;
+    -fx-alignment: center-right;
+}
+
+.timestamp-other {
+    -fx-text-fill: #65676b;
+}
