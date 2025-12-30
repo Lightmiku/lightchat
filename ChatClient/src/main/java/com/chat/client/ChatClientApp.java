@@ -12,6 +12,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -50,9 +52,24 @@ public class ChatClientApp extends Application {
     private String myAvatarColor = "#CCCCCC";
     private Map<String, String> friendList = new HashMap<>(); // username -> status
 
+    private Label chatTitleLabel; // New title label
+    private Button collabBtn; // Global collab button
+
     private class ChatSession {
         VBox chatBox;
         ScrollPane scrollPane;
+        
+        // Collab parts
+        boolean isCollabActive = false;
+        TextArea editorArea;
+        SplitPane splitPane;
+        VBox editorBox; // Container for label + editor
+        Label statusLabel; // "User is typing..."
+        
+        boolean isRemoteUpdate = false;
+        boolean isLockedByMe = false;
+        javafx.animation.PauseTransition unlockTimer;
+        Button copyBtn;
 
         public ChatSession() {
             chatBox = new VBox(10);
@@ -62,6 +79,56 @@ public class ChatClientApp extends Application {
             scrollPane = new ScrollPane(chatBox);
             scrollPane.setFitToWidth(true);
             scrollPane.setStyle("-fx-background: white; -fx-background-color: white;");
+            
+            editorArea = new TextArea();
+            editorArea.setFont(javafx.scene.text.Font.font("Consolas", 14));
+            editorArea.setPromptText("Shared Code Editor - Type here to collaborate...");
+            
+            statusLabel = new Label();
+            statusLabel.setTextFill(Color.RED);
+            statusLabel.setStyle("-fx-font-weight: bold;");
+            
+            copyBtn = new Button("复制全部代码");
+            copyBtn.setMaxWidth(Double.MAX_VALUE);
+            copyBtn.setOnAction(e -> {
+                Clipboard clipboard = Clipboard.getSystemClipboard();
+                ClipboardContent content = new ClipboardContent();
+                content.putString(editorArea.getText());
+                clipboard.setContent(content);
+                new Alert(Alert.AlertType.INFORMATION, "代码已复制到剪贴板").show();
+            });
+            
+            editorBox = new VBox(5, statusLabel, editorArea, copyBtn);
+            VBox.setVgrow(editorArea, Priority.ALWAYS);
+            
+            splitPane = new SplitPane();
+            splitPane.getItems().add(scrollPane);
+            
+            unlockTimer = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(2));
+            unlockTimer.setOnFinished(e -> {
+                if (isLockedByMe) {
+                    isLockedByMe = false;
+                    if (!"All".equals(currentRecipient)) {
+                        client.sendCollabUnlock(currentRecipient);
+                    }
+                }
+            });
+        }
+        
+        public javafx.scene.Node getView() {
+            return splitPane;
+        }
+        
+        public void enableCollab(boolean enable) {
+            isCollabActive = enable;
+            if (enable) {
+                if (!splitPane.getItems().contains(editorBox)) {
+                    splitPane.getItems().add(editorBox);
+                    splitPane.setDividerPositions(0.5);
+                }
+            } else {
+                splitPane.getItems().remove(editorBox);
+            }
         }
     }
 
@@ -157,11 +224,16 @@ public class ChatClientApp extends Application {
     private void initMainUI() {
         mainRoot = new BorderPane();
         mainRoot.setPadding(new Insets(10));
+        
+        // Top: Chat Title
+        chatTitleLabel = new Label("公共聊天室");
+        chatTitleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-padding: 0 0 10 0;");
+        mainRoot.setTop(chatTitleLabel);
 
         // Initialize Global Chat Session
         chatSessions.put("All", new ChatSession());
         currentRecipient = "All";
-        mainRoot.setCenter(chatSessions.get("All").scrollPane);
+        mainRoot.setCenter(chatSessions.get("All").getView());
 
         // Right: User List & Profile
         VBox rightBox = new VBox(10);
@@ -247,18 +319,55 @@ public class ChatClientApp extends Application {
             }
         });
         
+        // Bottom: Input
+        inputField = new TextField();
+        Button sendBtn = new Button("发送");
+        Button fileBtn = new Button("文件");
+        Button imgBtn = new Button("图片");
+        Button collabBtn = new Button("协作");
+        collabBtn.setDisable(true);
+
         userList.setOnMouseClicked(e -> {
             String selected = userList.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 if (selected.equals("公共聊天室")) {
                     currentRecipient = "All";
+                    chatTitleLabel.setText("公共聊天室");
+                    collabBtn.setDisable(true);
+                    collabBtn.setText("代码协作");
                 } else {
                     currentRecipient = selected;
+                    chatTitleLabel.setText("与 " + selected + " 聊天中");
+                    collabBtn.setDisable(false);
                     if (!chatSessions.containsKey(selected)) {
-                        chatSessions.put(selected, new ChatSession());
+                        ChatSession session = new ChatSession();
+                        // Add listener for collaboration
+                        session.editorArea.textProperty().addListener((obs, oldVal, newVal) -> {
+                            if (!session.isRemoteUpdate && session.isCollabActive) {
+                                // Locking Logic
+                                if (!session.isLockedByMe) {
+                                    session.isLockedByMe = true;
+                                    client.sendCollabLock(selected);
+                                }
+                                session.unlockTimer.playFromStart(); // Reset timer
+                                
+                                client.sendCollabUpdate(selected, newVal);
+                            }
+                        });
+                        chatSessions.put(selected, session);
+                    }
+                    
+                    // Update button text based on state
+                    ChatSession s = chatSessions.get(selected);
+                    if (s.isCollabActive) {
+                        collabBtn.setText("停止协作");
+                        collabBtn.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white;");
+                    } else {
+                        collabBtn.setText("代码协作");
+                        collabBtn.setStyle("");
                     }
                 }
-                mainRoot.setCenter(chatSessions.get(currentRecipient).scrollPane);
+                mainRoot.setCenter(chatSessions.get(currentRecipient).getView());
             }
         });
 
@@ -269,18 +378,29 @@ public class ChatClientApp extends Application {
         rightBox.getChildren().addAll(profileBox, new Label("联系人"), userList, addFriendBtn);
         mainRoot.setRight(rightBox);
 
-        // Bottom: Input
-        inputField = new TextField();
-        Button sendBtn = new Button("发送");
-        Button fileBtn = new Button("文件");
-        Button imgBtn = new Button("图片");
-
         sendBtn.setOnAction(e -> sendMessage());
         inputField.setOnAction(e -> sendMessage());
         fileBtn.setOnAction(e -> chooseAndSendFile(false));
         imgBtn.setOnAction(e -> chooseAndSendFile(true));
         
-        HBox bottomBox = new HBox(10, inputField, sendBtn, fileBtn, imgBtn);
+        collabBtn.setOnAction(e -> {
+             if (!"All".equals(currentRecipient)) {
+                 ChatSession s = chatSessions.get(currentRecipient);
+                 if (s != null && s.isCollabActive) {
+                     // Stop collaboration
+                     s.enableCollab(false);
+                     client.sendCollabEnd(currentRecipient);
+                     collabBtn.setText("代码协作");
+                     collabBtn.setStyle("");
+                 } else {
+                     client.sendCollabRequest(currentRecipient);
+                     Alert info = new Alert(Alert.AlertType.INFORMATION, "已发送协作请求，等待对方接受...");
+                     info.show();
+                 }
+             }
+        });
+        
+        HBox bottomBox = new HBox(10, inputField, sendBtn, fileBtn, imgBtn, collabBtn);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
         HBox.setHgrow(inputField, Priority.ALWAYS);
         mainRoot.setBottom(bottomBox);
@@ -483,6 +603,118 @@ public class ChatClientApp extends Application {
                 case IMAGE:
                     handlePrivateOrFileMessage(msg);
                     break;
+
+                case COLLAB_REQUEST:
+                    // Ignore if sent by self (due to server echo)
+                    if (msg.getSender().equals(username)) return;
+
+                    Alert collabReq = new Alert(Alert.AlertType.CONFIRMATION);
+                    collabReq.setTitle("协作请求");
+                    collabReq.setHeaderText(msg.getSender() + " 邀请你进行代码协作");
+                    collabReq.setContentText("是否接受？");
+                    collabReq.showAndWait().ifPresent(response -> {
+                        if (response == ButtonType.OK) {
+                            client.sendCollabResponse(msg.getSender(), true);
+                            // Start session
+                            if (!chatSessions.containsKey(msg.getSender())) {
+                                ChatSession s = new ChatSession();
+                                // Add listener for collaboration
+                                String partner = msg.getSender();
+                                s.editorArea.textProperty().addListener((obs, oldVal, newVal) -> {
+                                    if (!s.isRemoteUpdate && s.isCollabActive) {
+                                        // Locking Logic
+                                        if (!s.isLockedByMe) {
+                                            s.isLockedByMe = true;
+                                            client.sendCollabLock(partner);
+                                        }
+                                        s.unlockTimer.playFromStart(); // Reset timer
+                                        
+                                        client.sendCollabUpdate(partner, newVal);
+                                    }
+                                });
+                                chatSessions.put(msg.getSender(), s);
+                            }
+                            ChatSession s = chatSessions.get(msg.getSender());
+                            s.enableCollab(true);
+                            // Switch to view
+                            currentRecipient = msg.getSender();
+                            chatTitleLabel.setText("与 " + currentRecipient + " 聊天中");
+                            userList.getSelectionModel().select(currentRecipient);
+                            mainRoot.setCenter(s.getView());
+                            
+                            collabBtn.setText("停止协作");
+                            collabBtn.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white;");
+                        } else {
+                            client.sendCollabResponse(msg.getSender(), false);
+                        }
+                    });
+                    break;
+
+                case COLLAB_ACCEPT:
+                    Alert acceptAlert = new Alert(Alert.AlertType.INFORMATION, msg.getSender() + " 接受了协作请求！");
+                    acceptAlert.show();
+                    if (chatSessions.containsKey(msg.getSender())) {
+                        ChatSession s = chatSessions.get(msg.getSender());
+                        s.enableCollab(true);
+                        // Send current content
+                        client.sendCollabSync(msg.getSender(), s.editorArea.getText());
+                        
+                        if (msg.getSender().equals(currentRecipient)) {
+                            collabBtn.setText("停止协作");
+                            collabBtn.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white;");
+                        }
+                    }
+                    break;
+
+                case COLLAB_DENY:
+                    new Alert(Alert.AlertType.INFORMATION, msg.getSender() + " 拒绝了协作请求。").show();
+                    break;
+                
+                case COLLAB_END:
+                    if (chatSessions.containsKey(msg.getSender())) {
+                        ChatSession s = chatSessions.get(msg.getSender());
+                        s.enableCollab(false);
+                        new Alert(Alert.AlertType.INFORMATION, msg.getSender() + " 停止了协作。").show();
+                        
+                        if (msg.getSender().equals(currentRecipient)) {
+                            collabBtn.setText("代码协作");
+                            collabBtn.setStyle("");
+                        }
+                    }
+                    break;
+
+                case COLLAB_LOCK:
+                    if (chatSessions.containsKey(msg.getSender())) {
+                        ChatSession s = chatSessions.get(msg.getSender());
+                        s.editorArea.setEditable(false);
+                        s.statusLabel.setText(msg.getSender() + " 正在输入...");
+                    }
+                    break;
+
+                case COLLAB_UNLOCK:
+                    if (chatSessions.containsKey(msg.getSender())) {
+                        ChatSession s = chatSessions.get(msg.getSender());
+                        s.editorArea.setEditable(true);
+                        s.statusLabel.setText("");
+                    }
+                    break;
+
+                case COLLAB_SYNC:
+                case COLLAB_UPDATE:
+                    if (chatSessions.containsKey(msg.getSender())) {
+                        ChatSession s = chatSessions.get(msg.getSender());
+                        if (!s.isCollabActive) s.enableCollab(true);
+                        
+                        s.isRemoteUpdate = true;
+                        int caret = s.editorArea.getCaretPosition();
+                        s.editorArea.setText(msg.getContent());
+                        if (caret <= msg.getContent().length()) {
+                            s.editorArea.positionCaret(caret);
+                        }
+                        s.isRemoteUpdate = false;
+                    }
+                    break;
+
                 default:
                     break;
             }

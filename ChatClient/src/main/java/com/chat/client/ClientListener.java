@@ -134,6 +134,64 @@ public class ClientListener {
         channel.writeAndFlush(msg);
     }
 
+    public void sendCollabRequest(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_REQUEST);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabResponse(String target, boolean accept) {
+        Message msg = new Message();
+        msg.setType(accept ? MessageType.COLLAB_ACCEPT : MessageType.COLLAB_DENY);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabSync(String target, String content) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_SYNC);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        msg.setContent(content);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabUpdate(String target, String content) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_UPDATE);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        msg.setContent(content);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabEnd(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_END);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabLock(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_LOCK);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
+    public void sendCollabUnlock(String target) {
+        Message msg = new Message();
+        msg.setType(MessageType.COLLAB_UNLOCK);
+        msg.setSender(username);
+        msg.setRecipient(target);
+        channel.writeAndFlush(msg);
+    }
+
     public void sendMessage(String content, String recipient) {
         if (channel != null && channel.isActive()) {
             Message msg = new Message();

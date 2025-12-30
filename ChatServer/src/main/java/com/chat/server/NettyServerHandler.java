@@ -260,6 +260,20 @@ public class NettyServerHandler extends SimpleChannelInboundHandler<Message> {
                 }
                 break;
 
+            case COLLAB_REQUEST:
+            case COLLAB_ACCEPT:
+            case COLLAB_DENY:
+            case COLLAB_SYNC:
+            case COLLAB_UPDATE:
+            case COLLAB_END:
+            case COLLAB_LOCK:
+            case COLLAB_UNLOCK:
+                // Forward to recipient if friends
+                if (msg.getRecipient() != null) {
+                    ChatServer.sendPrivateMessage(msg);
+                }
+                break;
+
             case LOGOUT:
                 ChatServer.removeClient(username);
                 ctx.close();
