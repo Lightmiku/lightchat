@@ -205,6 +205,26 @@ public class NettyServerHandler extends SimpleChannelInboundHandler<Message> {
                 }
                 break;
 
+            case DELETE_FRIEND:
+                String friendToDelete = msg.getRecipient(); // The friend to delete
+                DatabaseManager.deleteFriend(this.username, friendToDelete);
+                
+                // 1. Update sender's friend list
+                Message updateSender = new Message();
+                updateSender.setType(MessageType.FRIEND_LIST);
+                updateSender.setOnlineUsers(DatabaseManager.getFriends(this.username));
+                ctx.writeAndFlush(updateSender);
+                
+                // 2. Update ex-friend's friend list (if online)
+                io.netty.channel.Channel exFriendChannel = ChatServer.getClient(friendToDelete);
+                if (exFriendChannel != null) {
+                    Message updateExFriend = new Message();
+                    updateExFriend.setType(MessageType.FRIEND_LIST);
+                    updateExFriend.setOnlineUsers(DatabaseManager.getFriends(friendToDelete));
+                    exFriendChannel.writeAndFlush(updateExFriend);
+                }
+                break;
+
             case ADD_FRIEND_RESPONSE:
                 String requester = msg.getRecipient(); // The one who sent the request
                 boolean accepted = "ACCEPTED".equals(msg.getContent());

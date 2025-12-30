@@ -78,6 +78,20 @@ public class ChatServer {
     }
 
     public static void sendPrivateMessage(Message message) {
+        // Check friendship
+        if (!DatabaseManager.isFriend(message.getSender(), message.getRecipient())) {
+            Channel sender = clients.get(message.getSender());
+            if (sender != null) {
+                Message errorMsg = new Message();
+                errorMsg.setType(MessageType.CHAT_PRIVATE);
+                errorMsg.setSender("System");
+                errorMsg.setRecipient(message.getSender());
+                errorMsg.setContent("Message failed: You are not friends with " + message.getRecipient());
+                sender.writeAndFlush(errorMsg);
+            }
+            return;
+        }
+
         Channel recipient = clients.get(message.getRecipient());
         if (recipient != null) {
             recipient.writeAndFlush(message);

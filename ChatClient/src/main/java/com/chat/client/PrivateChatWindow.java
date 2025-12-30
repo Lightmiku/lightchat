@@ -34,7 +34,7 @@ public class PrivateChatWindow {
 
     private void initUI() {
         stage = new Stage();
-        stage.setTitle("Private Chat with " + targetUser);
+        stage.setTitle("与 " + targetUser + " 的私聊");
 
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(10));
@@ -47,9 +47,9 @@ public class PrivateChatWindow {
 
         inputField = new TextField();
         inputField.setPrefWidth(200);
-        Button sendBtn = new Button("Send");
-        Button fileBtn = new Button("File");
-        Button imgBtn = new Button("Image");
+        Button sendBtn = new Button("发送");
+        Button fileBtn = new Button("文件");
+        Button imgBtn = new Button("图片");
         
         sendBtn.setOnAction(e -> sendMessage());
         inputField.setOnAction(e -> sendMessage());
@@ -105,10 +105,10 @@ public class PrivateChatWindow {
                 imageView.setPreserveRatio(true);
                 msgContainer.getChildren().add(imageView);
             } catch (Exception e) {
-                msgContainer.getChildren().add(new Label("[Error loading image]"));
+                msgContainer.getChildren().add(new Label("[图片加载失败]"));
             }
         } else if (msg.getType() == MessageType.FILE) {
-            Label fileLabel = new Label("File: " + msg.getFileName() + " (Click to Download)");
+            Label fileLabel = new Label("文件: " + msg.getFileName() + " (点击下载)");
             fileLabel.setStyle("-fx-text-fill: blue; -fx-underline: true; -fx-cursor: hand;");
             fileLabel.setOnMouseClicked(e -> saveFile(msg.getFileName(), msg.getFileData()));
             msgContainer.getChildren().add(fileLabel);
@@ -141,7 +141,7 @@ public class PrivateChatWindow {
         if (data == null) return;
         
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save File");
+        fileChooser.setTitle("保存文件");
         fileChooser.setInitialFileName(fileName);
         File file = fileChooser.showSaveDialog(stage);
         
@@ -149,16 +149,16 @@ public class PrivateChatWindow {
             try {
                 java.nio.file.Files.write(file.toPath(), data);
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Success");
+                alert.setTitle("成功");
                 alert.setHeaderText(null);
-                alert.setContentText("File saved successfully!");
+                alert.setContentText("文件保存成功！");
                 alert.showAndWait();
             } catch (Exception e) {
                 e.printStackTrace();
                 Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Error");
-                alert.setHeaderText("Save Failed");
-                alert.setContentText("Could not save file: " + e.getMessage());
+                alert.setTitle("错误");
+                alert.setHeaderText("保存失败");
+                alert.setContentText("无法保存文件: " + e.getMessage());
                 alert.showAndWait();
             }
         }
@@ -174,7 +174,7 @@ public class PrivateChatWindow {
 
     private void chooseAndSendFile(boolean isImage) {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(isImage ? "Select Image" : "Select File");
+        fileChooser.setTitle(isImage ? "选择图片" : "选择文件");
         if (isImage) {
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
         }

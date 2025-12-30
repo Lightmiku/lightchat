@@ -77,6 +77,14 @@ public class ClientListener {
         msg.setRecipient(targetUser);
         channel.writeAndFlush(msg);
     }
+
+    public void deleteFriend(String targetUser) {
+        Message msg = new Message();
+        msg.setType(MessageType.DELETE_FRIEND);
+        msg.setSender(username);
+        msg.setRecipient(targetUser);
+        channel.writeAndFlush(msg);
+    }
     
     public void acceptFriendRequest(String requester) {
         Message msg = new Message();

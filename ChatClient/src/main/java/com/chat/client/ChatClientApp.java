@@ -21,25 +21,49 @@ import javafx.stage.Stage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ChatClientApp extends Application {
 
     private ClientListener client;
-    private VBox chatBox;
-    private ScrollPane chatScroll;
+    // Removed single chatBox/chatScroll, now managed per session
     private ListView<String> userList;
     private TextField inputField;
     private String username;
     private String serverIp = "60.205.161.140";
-    private Map<String, PrivateChatWindow> privateChats = new HashMap<>();
+    
+    // Session management
+    private Map<String, ChatSession> chatSessions = new HashMap<>();
+    private String currentRecipient = "All";
+    private BorderPane mainRoot; // Reference to root to switch center
+    
     private Stage primaryStage;
     private Stage loginStage;
+    private Set<String> pinnedFriends = new HashSet<>();
     
     // User data
     private String myAvatarColor = "#CCCCCC";
     private Map<String, String> friendList = new HashMap<>(); // username -> status
+
+    private class ChatSession {
+        VBox chatBox;
+        ScrollPane scrollPane;
+
+        public ChatSession() {
+            chatBox = new VBox(10);
+            chatBox.setPadding(new Insets(10));
+            chatBox.setStyle("-fx-background-color: white;");
+
+            scrollPane = new ScrollPane(chatBox);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setStyle("-fx-background: white; -fx-background-color: white;");
+        }
+    }
 
     public static void main(String[] args) {
         launch(args);
@@ -53,7 +77,7 @@ public class ChatClientApp extends Application {
 
     private void showLoginWindow() {
         loginStage = new Stage();
-        loginStage.setTitle("Login - LightChat");
+        loginStage.setTitle("登录 - LightChat");
 
         GridPane grid = new GridPane();
         grid.setAlignment(Pos.CENTER);
@@ -62,22 +86,22 @@ public class ChatClientApp extends Application {
         grid.setPadding(new Insets(25, 25, 25, 25));
 
         TextField userField = new TextField();
-        userField.setPromptText("Username");
+        userField.setPromptText("用户名");
         PasswordField passField = new PasswordField();
-        passField.setPromptText("Password");
+        passField.setPromptText("密码");
         TextField ipField = new TextField("60.205.161.140");
-        ipField.setPromptText("Server IP");
+        ipField.setPromptText("服务器 IP");
 
-        Button btnLogin = new Button("Login");
-        Button btnRegister = new Button("Register");
+        Button btnLogin = new Button("登录");
+        Button btnRegister = new Button("注册");
         Label statusLabel = new Label();
         statusLabel.setTextFill(Color.RED);
 
-        grid.add(new Label("Server IP:"), 0, 0);
+        grid.add(new Label("服务器 IP:"), 0, 0);
         grid.add(ipField, 1, 0);
-        grid.add(new Label("Username:"), 0, 1);
+        grid.add(new Label("用户名:"), 0, 1);
         grid.add(userField, 1, 1);
-        grid.add(new Label("Password:"), 0, 2);
+        grid.add(new Label("密码:"), 0, 2);
         grid.add(passField, 1, 2);
         
         HBox btnBox = new HBox(10, btnLogin, btnRegister);
@@ -90,7 +114,7 @@ public class ChatClientApp extends Application {
             String p = passField.getText();
             String ip = ipField.getText();
             if (u.isEmpty() || p.isEmpty()) {
-                statusLabel.setText("Please enter username and password");
+                statusLabel.setText("请输入用户名和密码");
                 return;
             }
             connectAndAction(ip, u, p, true, statusLabel);
@@ -101,7 +125,7 @@ public class ChatClientApp extends Application {
             String p = passField.getText();
             String ip = ipField.getText();
             if (u.isEmpty() || p.isEmpty()) {
-                statusLabel.setText("Please enter username and password");
+                statusLabel.setText("请输入用户名和密码");
                 return;
             }
             connectAndAction(ip, u, p, false, statusLabel);
@@ -117,7 +141,7 @@ public class ChatClientApp extends Application {
             serverIp = ip;
             client = new ClientListener(serverIp, 8888, this::handleMessage);
             if (!client.connect()) {
-                statusLabel.setText("Connection failed!");
+                statusLabel.setText("连接失败！");
                 client = null;
                 return;
             }
@@ -131,15 +155,13 @@ public class ChatClientApp extends Application {
     }
 
     private void initMainUI() {
-        BorderPane root = new BorderPane();
-        root.setPadding(new Insets(10));
+        mainRoot = new BorderPane();
+        mainRoot.setPadding(new Insets(10));
 
-        // Center: Chat Area
-        chatBox = new VBox(10);
-        chatBox.setPadding(new Insets(10));
-        chatScroll = new ScrollPane(chatBox);
-        chatScroll.setFitToWidth(true);
-        root.setCenter(chatScroll);
+        // Initialize Global Chat Session
+        chatSessions.put("All", new ChatSession());
+        currentRecipient = "All";
+        mainRoot.setCenter(chatSessions.get("All").scrollPane);
 
         // Right: User List & Profile
         VBox rightBox = new VBox(10);
@@ -162,7 +184,7 @@ public class ChatClientApp extends Application {
         
         // Admin Button
         if ("mikulight".equals(username)) {
-            Button adminBtn = new Button("Admin");
+            Button adminBtn = new Button("管理");
             adminBtn.setStyle("-fx-background-color: red; -fx-text-fill: white;");
             adminBtn.setOnAction(e -> showAdminPanel());
             profileBox.getChildren().add(adminBtn);
@@ -170,7 +192,7 @@ public class ChatClientApp extends Application {
         
         // Friend List
         userList = new ListView<>();
-        userList.getItems().add("Global Chat Room");
+        userList.getItems().add("公共聊天室");
         userList.setCellFactory(param -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -181,12 +203,44 @@ public class ChatClientApp extends Application {
                 } else {
                     HBox box = new HBox(10);
                     box.setAlignment(Pos.CENTER_LEFT);
-                    if (item.equals("Global Chat Room")) {
+                    if (item.equals("公共聊天室")) {
                         box.getChildren().add(new Label("🌐"));
                         box.getChildren().add(new Label(item));
+                        setContextMenu(null);
                     } else {
                         box.getChildren().add(createAvatar(item, "#CCCCCC")); // Default color for friends for now
                         box.getChildren().add(new Label(item));
+                        
+                        ContextMenu contextMenu = new ContextMenu();
+                        
+                        MenuItem pinItem = new MenuItem(pinnedFriends.contains(item) ? "取消置顶" : "置顶");
+                        pinItem.setOnAction(event -> {
+                            if (pinnedFriends.contains(item)) {
+                                pinnedFriends.remove(item);
+                            } else {
+                                pinnedFriends.add(item);
+                            }
+                            
+                            List<String> currentFriends = new ArrayList<>();
+                            for (String s : userList.getItems()) {
+                                if (!"公共聊天室".equals(s)) {
+                                    currentFriends.add(s);
+                                }
+                            }
+                            sortAndSetUserList(currentFriends);
+                        });
+
+                        MenuItem deleteItem = new MenuItem("删除好友");
+                        deleteItem.setOnAction(event -> {
+                            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "确定要删除 " + item + " 吗?", ButtonType.YES, ButtonType.NO);
+                            alert.showAndWait().ifPresent(response -> {
+                                if (response == ButtonType.YES) {
+                                    client.deleteFriend(item);
+                                }
+                            });
+                        });
+                        contextMenu.getItems().addAll(pinItem, deleteItem);
+                        setContextMenu(contextMenu);
                     }
                     setGraphic(box);
                 }
@@ -194,26 +248,32 @@ public class ChatClientApp extends Application {
         });
         
         userList.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) {
-                String selected = userList.getSelectionModel().getSelectedItem();
-                if (selected != null && !selected.equals("Global Chat Room")) {
-                    openPrivateChat(selected);
+            String selected = userList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                if (selected.equals("公共聊天室")) {
+                    currentRecipient = "All";
+                } else {
+                    currentRecipient = selected;
+                    if (!chatSessions.containsKey(selected)) {
+                        chatSessions.put(selected, new ChatSession());
+                    }
                 }
+                mainRoot.setCenter(chatSessions.get(currentRecipient).scrollPane);
             }
         });
 
-        Button addFriendBtn = new Button("Add Friend");
+        Button addFriendBtn = new Button("添加好友");
         addFriendBtn.setMaxWidth(Double.MAX_VALUE);
         addFriendBtn.setOnAction(e -> showAddFriendDialog());
 
-        rightBox.getChildren().addAll(profileBox, new Label("Contacts"), userList, addFriendBtn);
-        root.setRight(rightBox);
+        rightBox.getChildren().addAll(profileBox, new Label("联系人"), userList, addFriendBtn);
+        mainRoot.setRight(rightBox);
 
         // Bottom: Input
         inputField = new TextField();
-        Button sendBtn = new Button("Send");
-        Button fileBtn = new Button("File");
-        Button imgBtn = new Button("Image");
+        Button sendBtn = new Button("发送");
+        Button fileBtn = new Button("文件");
+        Button imgBtn = new Button("图片");
 
         sendBtn.setOnAction(e -> sendMessage());
         inputField.setOnAction(e -> sendMessage());
@@ -223,9 +283,9 @@ public class ChatClientApp extends Application {
         HBox bottomBox = new HBox(10, inputField, sendBtn, fileBtn, imgBtn);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
         HBox.setHgrow(inputField, Priority.ALWAYS);
-        root.setBottom(bottomBox);
+        mainRoot.setBottom(bottomBox);
         
-        Scene scene = new Scene(root, 800, 500);
+        Scene scene = new Scene(mainRoot, 800, 500);
         try {
             scene.getStylesheets().add(getClass().getResource("styles.css").toExternalForm());
         } catch (Exception e) {
@@ -244,14 +304,14 @@ public class ChatClientApp extends Application {
 
     private void showSettingsDialog() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Select Avatar Image");
+        fileChooser.setTitle("选择头像图片");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg"));
         File file = fileChooser.showOpenDialog(primaryStage);
         if (file != null) {
             try {
                 byte[] data = Files.readAllBytes(file.toPath());
                 client.updateAvatar(data);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "Avatar updated!");
+                Alert alert = new Alert(Alert.AlertType.INFORMATION, "头像已更新！");
                 alert.show();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -261,8 +321,8 @@ public class ChatClientApp extends Application {
 
     private void showAddFriendDialog() {
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Add Friend");
-        dialog.setHeaderText("Enter username to add:");
+        dialog.setTitle("添加好友");
+        dialog.setHeaderText("输入要添加的用户名：");
         dialog.showAndWait().ifPresent(target -> {
             if (!target.isEmpty() && !target.equals(username)) {
                 client.sendFriendRequest(target);
@@ -280,16 +340,16 @@ public class ChatClientApp extends Application {
         }
         
         adminStage = new Stage();
-        adminStage.setTitle("Admin Panel");
+        adminStage.setTitle("管理面板");
         
         VBox root = new VBox(10);
         root.setPadding(new Insets(10));
         
         adminUserList = new ListView<>();
-        Button refreshBtn = new Button("Refresh List");
+        Button refreshBtn = new Button("刷新列表");
         refreshBtn.setOnAction(e -> client.requestAdminUserList());
         
-        Button banBtn = new Button("Ban/Unban");
+        Button banBtn = new Button("封禁/解封");
         banBtn.setStyle("-fx-background-color: orange;");
         banBtn.setOnAction(e -> {
             String selectedFull = adminUserList.getSelectionModel().getSelectedItem();
@@ -307,7 +367,7 @@ public class ChatClientApp extends Application {
             }
         });
         
-        Button deleteBtn = new Button("Delete User");
+        Button deleteBtn = new Button("删除用户");
         deleteBtn.setStyle("-fx-background-color: red; -fx-text-fill: white;");
         deleteBtn.setOnAction(e -> {
             String selected = getSelectedAdminUser();
@@ -315,7 +375,7 @@ public class ChatClientApp extends Application {
         });
         
         HBox btnBox = new HBox(10, refreshBtn, banBtn, deleteBtn);
-        root.getChildren().addAll(new Label("User List (Format: Name : Online : Banned)"), adminUserList, btnBox);
+        root.getChildren().addAll(new Label("用户列表 (格式: 姓名 : 在线 : 封禁)"), adminUserList, btnBox);
         
         Scene scene = new Scene(root, 400, 500);
         adminStage.setScene(scene);
@@ -328,6 +388,20 @@ public class ChatClientApp extends Application {
         String item = adminUserList.getSelectionModel().getSelectedItem();
         if (item == null) return null;
         return item.split(":")[0].trim();
+    }
+
+    private void sortAndSetUserList(List<String> friends) {
+        friends.sort((f1, f2) -> {
+            boolean p1 = pinnedFriends.contains(f1);
+            boolean p2 = pinnedFriends.contains(f2);
+            if (p1 && !p2) return -1;
+            if (!p1 && p2) return 1;
+            return f1.compareTo(f2);
+        });
+        
+        ObservableList<String> items = FXCollections.observableArrayList("公共聊天室");
+        items.addAll(friends);
+        userList.setItems(items);
     }
 
     private void handleMessage(Message msg) {
@@ -362,7 +436,7 @@ public class ChatClientApp extends Application {
                     break;
 
                 case REGISTER_SUCCESS:
-                    Alert regAlert = new Alert(Alert.AlertType.INFORMATION, "Registration successful! Please login.");
+                    Alert regAlert = new Alert(Alert.AlertType.INFORMATION, "注册成功！请登录。");
                     regAlert.show();
                     break;
 
@@ -372,18 +446,18 @@ public class ChatClientApp extends Application {
                     break;
 
                 case FRIEND_LIST:
-                    ObservableList<String> items = FXCollections.observableArrayList("Global Chat Room");
+                    List<String> friends = new ArrayList<>();
                     if (msg.getOnlineUsers() != null) {
-                        items.addAll(msg.getOnlineUsers());
+                        friends.addAll(msg.getOnlineUsers());
                     }
-                    userList.setItems(items);
+                    sortAndSetUserList(friends);
                     break;
 
                 case ADD_FRIEND_REQUEST:
                     Alert reqAlert = new Alert(Alert.AlertType.CONFIRMATION);
-                    reqAlert.setTitle("Friend Request");
-                    reqAlert.setHeaderText("Friend Request from " + msg.getSender());
-                    reqAlert.setContentText("Do you want to accept?");
+                    reqAlert.setTitle("好友请求");
+                    reqAlert.setHeaderText("收到来自 " + msg.getSender() + " 的好友请求");
+                    reqAlert.setContentText("是否接受？");
                     reqAlert.showAndWait().ifPresent(response -> {
                         if (response == ButtonType.OK) {
                             client.acceptFriendRequest(msg.getSender());
@@ -396,12 +470,12 @@ public class ChatClientApp extends Application {
                 case ADD_FRIEND_RESPONSE:
                     if ("ACCEPTED".equals(msg.getContent())) {
                         userList.getItems().add(msg.getSender()); // The sender is the one who accepted
-                        new Alert(Alert.AlertType.INFORMATION, msg.getSender() + " accepted your friend request!").show();
+                        new Alert(Alert.AlertType.INFORMATION, msg.getSender() + " 接受了你的好友请求！").show();
                     }
                     break;
 
                 case CHAT_ALL:
-                    addMessage(msg.getSender(), msg.getContent(), MessageType.CHAT_ALL, null, null);
+                    addMessage(chatSessions.get("All"), msg.getSender(), msg.getContent(), MessageType.CHAT_ALL, null, null);
                     break;
                     
                 case CHAT_PRIVATE:
@@ -419,44 +493,38 @@ public class ChatClientApp extends Application {
         boolean isPrivate = msg.getType() == MessageType.CHAT_PRIVATE || 
                            (msg.getRecipient() != null && !"All".equals(msg.getRecipient()));
         
+        String targetSessionKey = "All";
         if (isPrivate) {
-            String otherParty = msg.getSender().equals(username) ? msg.getRecipient() : msg.getSender();
-            
-            if (!privateChats.containsKey(otherParty)) {
-                 PrivateChatWindow w = new PrivateChatWindow(otherParty, client, username);
-                 privateChats.put(otherParty, w);
-            }
-            
-            PrivateChatWindow w = privateChats.get(otherParty);
-            if (!msg.getSender().equals(username)) {
-                w.show();
-            }
-            w.appendMessage(msg);
-        } else {
-            addMessage(msg.getSender(), msg.getContent(), msg.getType(), msg.getFileData(), msg.getFileName());
+            targetSessionKey = msg.getSender().equals(username) ? msg.getRecipient() : msg.getSender();
         }
+        
+        if (!chatSessions.containsKey(targetSessionKey)) {
+            chatSessions.put(targetSessionKey, new ChatSession());
+        }
+        
+        addMessage(chatSessions.get(targetSessionKey), msg.getSender(), msg.getContent(), msg.getType(), msg.getFileData(), msg.getFileName());
     }
 
     private void sendMessage() {
         String content = inputField.getText();
         if (content.isEmpty()) return;
-        client.sendMessage(content, "All");
+        client.sendMessage(content, currentRecipient);
         inputField.clear();
     }
     
     private void chooseAndSendFile(boolean isImage) {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle(isImage ? "Select Image" : "Select File");
+        fileChooser.setTitle(isImage ? "选择图片" : "选择文件");
         if (isImage) {
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
         }
         File file = fileChooser.showOpenDialog(primaryStage);
         if (file != null) {
-            client.sendFile(file, "All");
+            client.sendFile(file, currentRecipient);
         }
     }
 
-    private void addMessage(String sender, String content, MessageType type, byte[] data, String fileName) {
+    private void addMessage(ChatSession session, String sender, String content, MessageType type, byte[] data, String fileName) {
         boolean isSelf = sender.equals(username);
         
         HBox row = new HBox(10);
@@ -488,7 +556,7 @@ public class ChatClientApp extends Application {
                 msgContainer.getChildren().add(imageView);
             } catch (Exception e) { }
         } else if (type == MessageType.FILE) {
-            Label fileLabel = new Label("File: " + fileName);
+            Label fileLabel = new Label("文件: " + fileName);
             fileLabel.setStyle("-fx-text-fill: blue; -fx-underline: true; -fx-cursor: hand;");
             fileLabel.setOnMouseClicked(e -> saveFile(fileName, data));
             msgContainer.getChildren().add(fileLabel);
@@ -507,8 +575,8 @@ public class ChatClientApp extends Application {
             row.getChildren().addAll(avatar, msgContainer);
         }
         
-        chatBox.getChildren().add(row);
-        chatScroll.setVvalue(1.0);
+        session.chatBox.getChildren().add(row);
+        session.scrollPane.setVvalue(1.0);
     }
     
     private StackPane createAvatar(String name, String colorHex) {
@@ -527,10 +595,10 @@ public class ChatClientApp extends Application {
     
     private void showUserInfoPopup(String user) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("User Info");
+        alert.setTitle("用户信息");
         alert.setHeaderText(user);
         
-        ButtonType addFriend = new ButtonType("Add Friend");
+        ButtonType addFriend = new ButtonType("添加好友");
         alert.getButtonTypes().add(addFriend);
         
         alert.showAndWait().ifPresent(type -> {
@@ -549,15 +617,5 @@ public class ChatClientApp extends Application {
                 Files.write(file.toPath(), data);
             } catch (Exception e) { e.printStackTrace(); }
         }
-    }
-    
-    private void openPrivateChat(String targetUser) {
-        if (targetUser.equals(username)) return;
-        PrivateChatWindow window = privateChats.get(targetUser);
-        if (window == null) {
-            window = new PrivateChatWindow(targetUser, client, username);
-            privateChats.put(targetUser, window);
-        }
-        window.show();
     }
 }

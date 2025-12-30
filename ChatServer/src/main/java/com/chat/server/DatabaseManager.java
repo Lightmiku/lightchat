@@ -225,6 +225,33 @@ public class DatabaseManager {
         }
     }
 
+    public static void deleteFriend(String user1, String user2) {
+        String sql = "DELETE FROM friends WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)";
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, user1);
+            pstmt.setString(2, user2);
+            pstmt.setString(3, user2);
+            pstmt.setString(4, user1);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static boolean isFriend(String user1, String user2) {
+        String sql = "SELECT 1 FROM friends WHERE user1 = ? AND user2 = ? AND status = 'ACCEPTED'";
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, user1);
+            pstmt.setString(2, user2);
+            return pstmt.executeQuery().next();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
     public static List<String> getFriends(String username) {
         List<String> friends = new ArrayList<>();
         String sql = "SELECT user2 FROM friends WHERE user1 = ? AND status = 'ACCEPTED'";
