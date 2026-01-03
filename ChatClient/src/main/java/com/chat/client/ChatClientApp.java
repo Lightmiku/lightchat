@@ -47,6 +47,7 @@ public class ChatClientApp extends Application {
     private Stage primaryStage;
     private Stage loginStage;
     private Set<String> pinnedFriends = new HashSet<>();
+    private Set<String> unreadUsers = new HashSet<>();
     
     // User data
     private String myAvatarColor = "#CCCCCC";
@@ -278,10 +279,17 @@ public class ChatClientApp extends Application {
                     if (item.equals("公共聊天室")) {
                         box.getChildren().add(new Label("🌐"));
                         box.getChildren().add(new Label(item));
+                        if (unreadUsers.contains(item)) {
+                            box.getChildren().add(new Circle(4, Color.RED));
+                        }
                         setContextMenu(null);
                     } else {
                         box.getChildren().add(createAvatar(item, "#CCCCCC")); // Default color for friends for now
                         box.getChildren().add(new Label(item));
+                        
+                        if (unreadUsers.contains(item)) {
+                            box.getChildren().add(new Circle(4, Color.RED));
+                        }
                         
                         ContextMenu contextMenu = new ContextMenu();
                         
@@ -330,6 +338,12 @@ public class ChatClientApp extends Application {
         userList.setOnMouseClicked(e -> {
             String selected = userList.getSelectionModel().getSelectedItem();
             if (selected != null) {
+                // Clear unread status
+                if (unreadUsers.contains(selected)) {
+                    unreadUsers.remove(selected);
+                    userList.refresh();
+                }
+
                 if (selected.equals("公共聊天室")) {
                     currentRecipient = "All";
                     chatTitleLabel.setText("公共聊天室");
@@ -595,6 +609,10 @@ public class ChatClientApp extends Application {
                     break;
 
                 case CHAT_ALL:
+                    if (!"All".equals(currentRecipient) && !msg.getSender().equals(username)) {
+                        unreadUsers.add("公共聊天室");
+                        userList.refresh();
+                    }
                     addMessage(chatSessions.get("All"), msg.getSender(), msg.getContent(), MessageType.CHAT_ALL, null, null);
                     break;
                     
@@ -728,6 +746,12 @@ public class ChatClientApp extends Application {
         String targetSessionKey = "All";
         if (isPrivate) {
             targetSessionKey = msg.getSender().equals(username) ? msg.getRecipient() : msg.getSender();
+        }
+
+        // Mark as unread if not currently selected and not sent by me
+        if (!targetSessionKey.equals(currentRecipient) && !msg.getSender().equals(username)) {
+            unreadUsers.add(targetSessionKey);
+            userList.refresh();
         }
         
         if (!chatSessions.containsKey(targetSessionKey)) {

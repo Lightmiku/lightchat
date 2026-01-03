@@ -2,15 +2,21 @@ package com.chat.client;
 
 import com.chat.common.Message;
 import com.chat.common.MessageType;
+import com.google.gson.Gson;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.serialization.ClassResolvers;
-import io.netty.handler.codec.serialization.ObjectDecoder;
-import io.netty.handler.codec.serialization.ObjectEncoder;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.codec.MessageToMessageDecoder;
+import io.netty.handler.codec.MessageToMessageEncoder;
+import io.netty.handler.codec.string.StringDecoder;
+import io.netty.handler.codec.string.StringEncoder;
+import io.netty.util.CharsetUtil;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ClientListener {
@@ -37,8 +43,22 @@ public class ClientListener {
                  @Override
                  protected void initChannel(SocketChannel ch) throws Exception {
                      ch.pipeline().addLast(
-                             new ObjectDecoder(ClassResolvers.cacheDisabled(null)),
-                             new ObjectEncoder(),
+                             new LengthFieldBasedFrameDecoder(10485760, 0, 4, 0, 4),
+                             new LengthFieldPrepender(4),
+                             new StringDecoder(CharsetUtil.UTF_8),
+                             new StringEncoder(CharsetUtil.UTF_8),
+                             new MessageToMessageEncoder<Message>() {
+                                 @Override
+                                 protected void encode(ChannelHandlerContext ctx, Message msg, List<Object> out) {
+                                     out.add(new Gson().toJson(msg));
+                                 }
+                             },
+                             new MessageToMessageDecoder<String>() {
+                                 @Override
+                                 protected void decode(ChannelHandlerContext ctx, String msg, List<Object> out) {
+                                     out.add(new Gson().fromJson(msg, Message.class));
+                                 }
+                             },
                              new NettyClientHandler(onMessageReceived)
                      );
                  }
